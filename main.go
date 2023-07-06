@@ -177,7 +177,8 @@ func main() {
 			if actionNeeded {
 				actionToDo := getActionNeeded(annotations, *deployment.Spec.Replicas, l)
 
-				Log(l, fmt.Sprintf("Name: %v, replicas: %d, action needed: %v\n",
+				Log(l, fmt.Sprintf("deployment: %v/%v, replicas: %d, action needed: %v\n",
+					deployment.Namespace,
 					deployment.Name,
 					*deployment.Spec.Replicas,
 					actionName[actionToDo]))
