@@ -75,7 +75,7 @@ func ConvertTimeToUTC(t string) (time.Time, error) {
 	return convertedTime, nil
 }
 
-func getActionNeeded(annotations map[string]string, l *log.Logger) Action {
+func getActionNeeded(annotations map[string]string, replicas int32, l *log.Logger) Action {
 	// prepare the current time for comparison
 	timeNow := time.Now()
 	//timeToConvert := fmt.Sprintf("%02d:%02d", now.Hour(), now.Minute())
@@ -106,15 +106,31 @@ func getActionNeeded(annotations map[string]string, l *log.Logger) Action {
 	//fmt.Printf("now: %v, start: %v, stop: %v\n", timeNow, timeStartTime, timeStopTime)
 
 	if timeStopTime.Before(timeNow) {
-		return Downscale
+		downTimeReplicas, err := strconv.ParseInt(annotations["d8r/downTimeReplicas"], 10, 32)
+		if err != nil {
+			Log(l, err.Error())
+			return NoAction
+		}
+		// only downscale if not done yet
+		if replicas != int32(downTimeReplicas) {
+			return Downscale
+		}
 	}
 	if timeStartTime.Before(timeNow) {
-		return Upscale
+		originalReplicas, err := strconv.ParseInt(annotations["d8r/originalReplicas"], 10, 32)
+		if err != nil {
+			Log(l, err.Error())
+			return NoAction
+		}
+		// only upscale if not done yet
+		if replicas != int32(originalReplicas) {
+			return Upscale
+		}
 	}
 	return NoAction
 }
 
-func isActionNeeded(annotations map[string]string, l *log.Logger) bool {
+func isActionNeeded(annotations map[string]string, replicas int32, l *log.Logger) bool {
 	days, ok := annotations["d8r/days"]
 	if !ok {
 		// no d8r/days annotation means this deployment is not set up for d8r properly
@@ -133,7 +149,7 @@ func isActionNeeded(annotations map[string]string, l *log.Logger) bool {
 		return false
 	}
 
-	if getActionNeeded(annotations, l) != NoAction {
+	if getActionNeeded(annotations, replicas, l) != NoAction {
 		return true
 	}
 	return false
@@ -165,9 +181,9 @@ func main() {
 
 		for _, deployment := range deployments.Items {
 			annotations := deployment.Annotations
-			actionNeeded := isActionNeeded(annotations, l)
+			actionNeeded := isActionNeeded(annotations, *deployment.Spec.Replicas, l)
 			if actionNeeded {
-				actionToDo := getActionNeeded(annotations, l)
+				actionToDo := getActionNeeded(annotations, *deployment.Spec.Replicas, l)
 
 				Log(l, fmt.Sprintf("Name: %v, replicas: %d, action needed: %v\n",
 					deployment.Name,
