@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -174,9 +175,16 @@ func main() {
 					actionName[actionToDo]))
 
 				if actionToDo == Downscale {
-					deployment.Annotations["d8r/original_replicas"] = string(*deployment.Spec.Replicas)
+					downTimeReplicas, err := strconv.ParseInt(deployment.Annotations["d8r/downtimeReplicas"], 10, 32)
+					if err != nil {
+						Log(l, err.Error())
+						continue
+					}
+					downTimeReplicas32 := int32(downTimeReplicas)
+					deployment.Spec.Replicas = &downTimeReplicas32
+					deployment.Annotations["d8r/originalReplicas"] = fmt.Sprintf("%d", *deployment.Spec.Replicas)
 					deployment.SetAnnotations(deployment.Annotations)
-					_, err := clientset.AppsV1().Deployments(deployment.Namespace).Update(context.TODO(),
+					_, err = clientset.AppsV1().Deployments(deployment.Namespace).Update(context.TODO(),
 						&deployment,
 						metav1.UpdateOptions{})
 					if err != nil {
