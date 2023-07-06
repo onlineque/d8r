@@ -196,9 +196,9 @@ func main() {
 						Log(l, err.Error())
 						continue
 					}
+					deployment.Annotations["d8r/originalReplicas"] = fmt.Sprintf("%d", *deployment.Spec.Replicas)
 					downTimeReplicas32 := int32(downTimeReplicas)
 					deployment.Spec.Replicas = &downTimeReplicas32
-					deployment.Annotations["d8r/originalReplicas"] = fmt.Sprintf("%d", *deployment.Spec.Replicas)
 					deployment.SetAnnotations(deployment.Annotations)
 					_, err = clientset.AppsV1().Deployments(deployment.Namespace).Update(context.TODO(),
 						&deployment,
