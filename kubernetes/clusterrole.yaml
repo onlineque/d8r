@@ -1,0 +1,15 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: d8r
+  namespace: d8r
+rules:          # Authorization rules for this role
+  - apiGroups:  # 1st API group
+      - apps    # An empty string designates the core API group.
+    resources:
+      - deployments
+      - cronjobs
+    verbs:
+      - get
+      - list
+      - update
