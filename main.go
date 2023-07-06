@@ -175,6 +175,7 @@ func main() {
 
 				if actionToDo == Downscale {
 					deployment.Annotations["d8r/original_replicas"] = string(*deployment.Spec.Replicas)
+					deployment.SetAnnotations(deployment.Annotations)
 				}
 			}
 		}
