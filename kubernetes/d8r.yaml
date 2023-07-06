@@ -1,0 +1,15 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: d8r
+  namespace: d8r
+spec:
+  template:
+    spec:
+      containers:
+      - name: d8r
+        image: onlineque/d8r:latest
+        imagePullPolicy: Always
+      restartPolicy: Never
+  backoffLimit: 4
+
