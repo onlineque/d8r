@@ -103,7 +103,7 @@ func getActionNeeded(annotations map[string]string, replicas int32, l *log.Logge
 		return NoAction
 	}
 
-	//fmt.Printf("now: %v, start: %v, stop: %v\n", timeNow, timeStartTime, timeStopTime)
+	fmt.Printf("now: %v, start: %v, stop: %v\n", timeNow, timeStartTime, timeStopTime)
 
 	if timeStopTime.Before(timeNow) {
 		downTimeReplicas, err := strconv.ParseInt(annotations["d8r/downTimeReplicas"], 10, 32)
