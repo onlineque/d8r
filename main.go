@@ -116,7 +116,7 @@ func getActionNeeded(annotations map[string]string, replicas int32, l *log.Logge
 			return Downscale
 		}
 	}
-	if timeStartTime.Before(timeNow) {
+	if timeStartTime.Before(timeNow) && !timeStopTime.Before(timeNow) {
 		originalReplicas, err := strconv.ParseInt(annotations["d8r/originalReplicas"], 10, 32)
 		if err != nil {
 			Log(l, err.Error())
