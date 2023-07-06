@@ -176,6 +176,12 @@ func main() {
 				if actionToDo == Downscale {
 					deployment.Annotations["d8r/original_replicas"] = string(*deployment.Spec.Replicas)
 					deployment.SetAnnotations(deployment.Annotations)
+					_, err := clientset.AppsV1().Deployments(deployment.Namespace).Update(context.TODO(),
+						&deployment,
+						metav1.UpdateOptions{})
+					if err != nil {
+						Log(l, err.Error())
+					}
 				}
 			}
 		}
