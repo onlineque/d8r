@@ -190,7 +190,8 @@ func main() {
 					*deployment.Spec.Replicas,
 					actionName[actionToDo]))
 
-				if actionToDo == Downscale {
+				switch actionToDo {
+				case Downscale:
 					downTimeReplicas, err := strconv.ParseInt(deployment.Annotations["d8r/downTimeReplicas"], 10, 32)
 					if err != nil {
 						Log(l, err.Error())
@@ -200,6 +201,20 @@ func main() {
 					downTimeReplicas32 := int32(downTimeReplicas)
 					deployment.Spec.Replicas = &downTimeReplicas32
 					deployment.SetAnnotations(deployment.Annotations)
+					_, err = clientset.AppsV1().Deployments(deployment.Namespace).Update(context.TODO(),
+						&deployment,
+						metav1.UpdateOptions{})
+					if err != nil {
+						Log(l, err.Error())
+					}
+				case Upscale:
+					originalReplicas, err := strconv.ParseInt(deployment.Annotations["d8r/originalReplicas"], 10, 32)
+					if err != nil {
+						Log(l, err.Error())
+						continue
+					}
+					originalReplicas32 := int32(originalReplicas)
+					deployment.Spec.Replicas = &originalReplicas32
 					_, err = clientset.AppsV1().Deployments(deployment.Namespace).Update(context.TODO(),
 						&deployment,
 						metav1.UpdateOptions{})
