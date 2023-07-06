@@ -78,12 +78,6 @@ func ConvertTimeToUTC(t string) (time.Time, error) {
 func getActionNeeded(annotations map[string]string, replicas int32, l *log.Logger) Action {
 	// prepare the current time for comparison
 	timeNow := time.Now()
-	//timeToConvert := fmt.Sprintf("%02d:%02d", now.Hour(), now.Minute())
-	//timeNow, err := time.Parse("15:04", timeToConvert)
-	//if err != nil {
-	//	Log(l, err.Error())
-	//	return NoAction
-	//}
 
 	startTime, startTimeOk := annotations["d8r/startTime"]
 	stopTime, stopTimeOk := annotations["d8r/stopTime"]
@@ -103,7 +97,7 @@ func getActionNeeded(annotations map[string]string, replicas int32, l *log.Logge
 		return NoAction
 	}
 
-	fmt.Printf("now: %v, start: %v, stop: %v\n", timeNow, timeStartTime, timeStopTime)
+	//fmt.Printf("now: %v, start: %v, stop: %v\n", timeNow, timeStartTime, timeStopTime)
 
 	if timeStopTime.Before(timeNow) {
 		downTimeReplicas, err := strconv.ParseInt(annotations["d8r/downTimeReplicas"], 10, 32)
@@ -177,8 +171,6 @@ func main() {
 			os.Exit(3)
 		}
 
-		Log(l, fmt.Sprintf("There are %d deployments in the cluster\n", len(deployments.Items)))
-
 		for _, deployment := range deployments.Items {
 			annotations := deployment.Annotations
 			actionNeeded := isActionNeeded(annotations, *deployment.Spec.Replicas, l)
@@ -201,12 +193,6 @@ func main() {
 					downTimeReplicas32 := int32(downTimeReplicas)
 					deployment.Spec.Replicas = &downTimeReplicas32
 					deployment.SetAnnotations(deployment.Annotations)
-					_, err = clientset.AppsV1().Deployments(deployment.Namespace).Update(context.TODO(),
-						&deployment,
-						metav1.UpdateOptions{})
-					if err != nil {
-						Log(l, err.Error())
-					}
 				case Upscale:
 					originalReplicas, err := strconv.ParseInt(deployment.Annotations["d8r/originalReplicas"], 10, 32)
 					if err != nil {
@@ -215,6 +201,9 @@ func main() {
 					}
 					originalReplicas32 := int32(originalReplicas)
 					deployment.Spec.Replicas = &originalReplicas32
+				}
+				if actionToDo == Upscale || actionToDo == Downscale {
+					// update the changed deployment
 					_, err = clientset.AppsV1().Deployments(deployment.Namespace).Update(context.TODO(),
 						&deployment,
 						metav1.UpdateOptions{})
