@@ -8,6 +8,13 @@ rules:          # Authorization rules for this role
       - apps    # An empty string designates the core API group.
     resources:
       - deployments
+    verbs:
+      - get
+      - list
+      - update
+  - apiGroups:
+      - batch
+    resources:
       - cronjobs
     verbs:
       - get

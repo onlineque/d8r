@@ -22,10 +22,20 @@ const (
 	NoAction
 )
 
+const (
+	Suspend Action = iota
+	Resume
+)
+
 var actionName = map[Action]string{
 	Upscale:   "upscale",
 	Downscale: "downscale",
 	NoAction:  "no action",
+}
+
+var jobActionName = map[Action]string{
+	Suspend: "suspend",
+	Resume:  "resume",
 }
 
 func Log(l *log.Logger, msg string) {
@@ -201,6 +211,64 @@ func checkDeployments(clientset *kubernetes.Clientset, l *log.Logger) {
 	}
 }
 
+func getCronjobActionNeeded(annotations map[string]string, suspend bool, l *log.Logger) Action {
+	// prepare the current time for comparison
+	timeNow := time.Now()
+
+	startTime, startTimeOk := annotations["d8r/startTime"]
+	stopTime, stopTimeOk := annotations["d8r/stopTime"]
+	if !startTimeOk || !stopTimeOk {
+		// no d8r/startTime or d8r/stopTime annotation means this
+		// deployment is not set up for d8r properly
+		return NoAction
+	}
+	timeStartTime, err := ConvertTimeToUTC(startTime)
+	if err != nil {
+		Log(l, err.Error())
+		return NoAction
+	}
+	timeStopTime, err := ConvertTimeToUTC(stopTime)
+	if err != nil {
+		Log(l, err.Error())
+		return NoAction
+	}
+
+	//fmt.Printf("now: %v, start: %v, stop: %v\n", timeNow, timeStartTime, timeStopTime)
+
+	if timeStopTime.Before(timeNow) {
+		// only suspend if not done yet
+		if !suspend {
+			return Suspend
+		}
+	}
+	if timeStartTime.Before(timeNow) && !timeStopTime.Before(timeNow) {
+		// only resume if not done yet
+		if suspend {
+			return Resume
+		}
+	}
+	return NoAction
+}
+
+func isCronjobActionNeeded(annotations map[string]string, suspend bool, l *log.Logger) bool {
+	days, ok := annotations["d8r/days"]
+	if !ok {
+		// no d8r/days annotation means this deployment is not set up for d8r properly
+		return false
+	}
+	// abbreviation of the day today
+	today := time.Now().Weekday().String()[:3]
+	if !strings.Contains(days, today) {
+		// no d8r/days schedule for today, so no action is needed
+		return false
+	}
+
+	if getCronjobActionNeeded(annotations, suspend, l) != NoAction {
+		return true
+	}
+	return false
+}
+
 func checkCronjobs(clientset *kubernetes.Clientset, l *log.Logger) {
 	cronjobs, err := clientset.BatchV1().CronJobs("").List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
@@ -209,8 +277,15 @@ func checkCronjobs(clientset *kubernetes.Clientset, l *log.Logger) {
 	}
 	for _, cronjob := range cronjobs.Items {
 		annotations := cronjob.Annotations
-		fmt.Printf("cronjob: %v/%v\n", cronjob.Namespace, cronjob.Name)
-		fmt.Println(annotations)
+		suspend := cronjob.Spec.Suspend
+		actionNeeded := isCronjobActionNeeded(annotations, *suspend, l)
+		if actionNeeded {
+			actionToDo := getCronjobActionNeeded(annotations, *suspend, l)
+			fmt.Printf("cronjob: %v/%v, action needed: %s\n",
+				cronjob.Namespace,
+				cronjob.Name,
+				jobActionName[actionToDo])
+		}
 	}
 }
 

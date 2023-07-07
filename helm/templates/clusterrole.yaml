@@ -7,7 +7,15 @@ rules:
       - apps
     resources:
       - deployments
+    verbs:
+      - get
+      - list
+      - update
+  - apiGroups:
+      - batch
+    resources:
       - cronjobs
+      - jobs
     verbs:
       - get
       - list
