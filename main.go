@@ -281,10 +281,10 @@ func checkCronjobs(clientset *kubernetes.Clientset, l *log.Logger) {
 		actionNeeded := isCronjobActionNeeded(annotations, *suspend, l)
 		if actionNeeded {
 			actionToDo := getCronjobActionNeeded(annotations, *suspend, l)
-			fmt.Printf("cronjob: %v/%v, action needed: %s\n",
+			Log(l, fmt.Sprintf("cronjob: %v/%v, action needed: %s\n",
 				cronjob.Namespace,
 				cronjob.Name,
-				jobActionName[actionToDo])
+				jobActionName[actionToDo]))
 			var jobSuspend bool
 			switch actionToDo {
 			case Suspend:
