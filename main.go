@@ -285,6 +285,25 @@ func checkCronjobs(clientset *kubernetes.Clientset, l *log.Logger) {
 				cronjob.Namespace,
 				cronjob.Name,
 				jobActionName[actionToDo])
+			var jobSuspend bool
+			switch actionToDo {
+			case Suspend:
+				// suspend the job if it's downtime
+				jobSuspend = true
+				cronjob.Spec.Suspend = &jobSuspend
+			case Resume:
+				jobSuspend = false
+				// otherwise resume
+				cronjob.Spec.Suspend = &jobSuspend
+			}
+			if actionToDo == Suspend || actionToDo == Resume {
+				_, err = clientset.BatchV1().CronJobs(cronjob.Namespace).Update(context.TODO(),
+					&cronjob,
+					metav1.UpdateOptions{})
+				if err != nil {
+					Log(l, err.Error())
+				}
+			}
 		}
 	}
 }
