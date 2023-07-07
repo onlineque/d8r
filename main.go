@@ -75,7 +75,7 @@ func ConvertTimeToUTC(t string) (time.Time, error) {
 	return convertedTime, nil
 }
 
-func getActionNeeded(annotations map[string]string, replicas int32, l *log.Logger) Action {
+func getDeploymentActionNeeded(annotations map[string]string, replicas int32, l *log.Logger) Action {
 	// prepare the current time for comparison
 	timeNow := time.Now()
 
@@ -124,7 +124,7 @@ func getActionNeeded(annotations map[string]string, replicas int32, l *log.Logge
 	return NoAction
 }
 
-func isActionNeeded(annotations map[string]string, replicas int32, l *log.Logger) bool {
+func isDeploymentActionNeeded(annotations map[string]string, replicas int32, l *log.Logger) bool {
 	days, ok := annotations["d8r/days"]
 	if !ok {
 		// no d8r/days annotation means this deployment is not set up for d8r properly
@@ -143,7 +143,7 @@ func isActionNeeded(annotations map[string]string, replicas int32, l *log.Logger
 		return false
 	}
 
-	if getActionNeeded(annotations, replicas, l) != NoAction {
+	if getDeploymentActionNeeded(annotations, replicas, l) != NoAction {
 		return true
 	}
 	return false
@@ -158,9 +158,9 @@ func checkDeployments(clientset *kubernetes.Clientset, l *log.Logger) {
 
 	for _, deployment := range deployments.Items {
 		annotations := deployment.Annotations
-		actionNeeded := isActionNeeded(annotations, *deployment.Spec.Replicas, l)
+		actionNeeded := isDeploymentActionNeeded(annotations, *deployment.Spec.Replicas, l)
 		if actionNeeded {
-			actionToDo := getActionNeeded(annotations, *deployment.Spec.Replicas, l)
+			actionToDo := getDeploymentActionNeeded(annotations, *deployment.Spec.Replicas, l)
 
 			Log(l, fmt.Sprintf("deployment: %v/%v, replicas: %d, action needed: %v\n",
 				deployment.Namespace,
@@ -201,6 +201,19 @@ func checkDeployments(clientset *kubernetes.Clientset, l *log.Logger) {
 	}
 }
 
+func checkCronjobs(clientset *kubernetes.Clientset, l *log.Logger) {
+	cronjobs, err := clientset.BatchV1().CronJobs("").List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		Log(l, err.Error())
+		os.Exit(3)
+	}
+	for _, cronjob := range cronjobs.Items {
+		annotations := cronjob.Annotations
+		fmt.Printf("cronjob: %v/%v\n", cronjob.Namespace, cronjob.Name)
+		fmt.Println(annotations)
+	}
+}
+
 func main() {
 	l := log.New(os.Stdout, "", 0)
 
@@ -219,6 +232,7 @@ func main() {
 
 	for {
 		checkDeployments(clientset, l)
+		checkCronjobs(clientset, l)
 		time.Sleep(10 * time.Second)
 	}
 }
