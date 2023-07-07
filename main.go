@@ -149,6 +149,58 @@ func isActionNeeded(annotations map[string]string, replicas int32, l *log.Logger
 	return false
 }
 
+func checkDeployments(clientset *kubernetes.Clientset, l *log.Logger) {
+	deployments, err := clientset.AppsV1().Deployments("").List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		Log(l, err.Error())
+		os.Exit(3)
+	}
+
+	for _, deployment := range deployments.Items {
+		annotations := deployment.Annotations
+		actionNeeded := isActionNeeded(annotations, *deployment.Spec.Replicas, l)
+		if actionNeeded {
+			actionToDo := getActionNeeded(annotations, *deployment.Spec.Replicas, l)
+
+			Log(l, fmt.Sprintf("deployment: %v/%v, replicas: %d, action needed: %v\n",
+				deployment.Namespace,
+				deployment.Name,
+				*deployment.Spec.Replicas,
+				actionName[actionToDo]))
+
+			switch actionToDo {
+			case Downscale:
+				downTimeReplicas, err := strconv.ParseInt(deployment.Annotations["d8r/downTimeReplicas"], 10, 32)
+				if err != nil {
+					Log(l, err.Error())
+					continue
+				}
+				deployment.Annotations["d8r/originalReplicas"] = fmt.Sprintf("%d", *deployment.Spec.Replicas)
+				downTimeReplicas32 := int32(downTimeReplicas)
+				deployment.Spec.Replicas = &downTimeReplicas32
+				deployment.SetAnnotations(deployment.Annotations)
+			case Upscale:
+				originalReplicas, err := strconv.ParseInt(deployment.Annotations["d8r/originalReplicas"], 10, 32)
+				if err != nil {
+					Log(l, err.Error())
+					continue
+				}
+				originalReplicas32 := int32(originalReplicas)
+				deployment.Spec.Replicas = &originalReplicas32
+			}
+			if actionToDo == Upscale || actionToDo == Downscale {
+				// update the changed deployment
+				_, err = clientset.AppsV1().Deployments(deployment.Namespace).Update(context.TODO(),
+					&deployment,
+					metav1.UpdateOptions{})
+				if err != nil {
+					Log(l, err.Error())
+				}
+			}
+		}
+	}
+}
+
 func main() {
 	l := log.New(os.Stdout, "", 0)
 
@@ -164,57 +216,9 @@ func main() {
 		Log(l, err.Error())
 		os.Exit(2)
 	}
+
 	for {
-		deployments, err := clientset.AppsV1().Deployments("").List(context.TODO(), metav1.ListOptions{})
-		if err != nil {
-			Log(l, err.Error())
-			os.Exit(3)
-		}
-
-		for _, deployment := range deployments.Items {
-			annotations := deployment.Annotations
-			actionNeeded := isActionNeeded(annotations, *deployment.Spec.Replicas, l)
-			if actionNeeded {
-				actionToDo := getActionNeeded(annotations, *deployment.Spec.Replicas, l)
-
-				Log(l, fmt.Sprintf("deployment: %v/%v, replicas: %d, action needed: %v\n",
-					deployment.Namespace,
-					deployment.Name,
-					*deployment.Spec.Replicas,
-					actionName[actionToDo]))
-
-				switch actionToDo {
-				case Downscale:
-					downTimeReplicas, err := strconv.ParseInt(deployment.Annotations["d8r/downTimeReplicas"], 10, 32)
-					if err != nil {
-						Log(l, err.Error())
-						continue
-					}
-					deployment.Annotations["d8r/originalReplicas"] = fmt.Sprintf("%d", *deployment.Spec.Replicas)
-					downTimeReplicas32 := int32(downTimeReplicas)
-					deployment.Spec.Replicas = &downTimeReplicas32
-					deployment.SetAnnotations(deployment.Annotations)
-				case Upscale:
-					originalReplicas, err := strconv.ParseInt(deployment.Annotations["d8r/originalReplicas"], 10, 32)
-					if err != nil {
-						Log(l, err.Error())
-						continue
-					}
-					originalReplicas32 := int32(originalReplicas)
-					deployment.Spec.Replicas = &originalReplicas32
-				}
-				if actionToDo == Upscale || actionToDo == Downscale {
-					// update the changed deployment
-					_, err = clientset.AppsV1().Deployments(deployment.Namespace).Update(context.TODO(),
-						&deployment,
-						metav1.UpdateOptions{})
-					if err != nil {
-						Log(l, err.Error())
-					}
-				}
-			}
-		}
-
+		checkDeployments(clientset, l)
 		time.Sleep(10 * time.Second)
 	}
 }
