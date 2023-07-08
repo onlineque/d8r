@@ -261,7 +261,7 @@ func getCronjobActionNeeded(annotations map[string]string, suspend bool, l *log.
 		return NoAction
 	}
 
-	fmt.Printf("now: %v, start: %v, stop: %v\n", timeNow, timeStartTime, timeStopTime)
+	//fmt.Printf("now: %v, start: %v, stop: %v\n", timeNow, timeStartTime, timeStopTime)
 
 	if timeStopTime.Before(timeNow) {
 		// only suspend if not done yet
