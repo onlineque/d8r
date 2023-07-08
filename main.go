@@ -43,6 +43,20 @@ func Log(l *log.Logger, msg string) {
 	l.Print(msg)
 }
 
+func getRidOfDate(t time.Time) (time.Time, error) {
+	// now get rid of the date as it makes no sense to use it
+	formattedTime := fmt.Sprintf("0000-Jan-01 %02d:%02d +0000 UTC",
+		t.Hour(),
+		t.Minute(),
+	)
+
+	resultTime, err := time.Parse("2006-Jan-02 15:04 -0700 MST", formattedTime)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return resultTime, nil
+}
+
 func ConvertTimeToUTC(t string) (time.Time, error) {
 	timeSplit := strings.Split(t, " ")
 	if len(timeSplit) != 2 {
@@ -81,14 +95,7 @@ func ConvertTimeToUTC(t string) (time.Time, error) {
 		return time.Time{}, err
 	}
 	convertedTime := normalizedTime.In(UTCLocation)
-
-	// now get rid of the date as it makes no sense to use it
-	formattedUTCTime := fmt.Sprintf("0000-Jan-01 %02d:%02d +0000 UTC",
-		convertedTime.Hour(),
-		convertedTime.Minute(),
-	)
-
-	finalUTCTime, err := time.Parse("2006-Jan-02 15:04 -0700 MST", formattedUTCTime)
+	finalUTCTime, err := getRidOfDate(convertedTime)
 	if err != nil {
 		return time.Time{}, err
 	}
@@ -98,7 +105,12 @@ func ConvertTimeToUTC(t string) (time.Time, error) {
 
 func getDeploymentActionNeeded(annotations map[string]string, replicas int32, l *log.Logger) Action {
 	// prepare the current time for comparison
-	timeNow := time.Now()
+	timeNowRaw := time.Now()
+	timeNow, err := getRidOfDate(timeNowRaw)
+	if err != nil {
+		Log(l, err.Error())
+		return NoAction
+	}
 
 	startTime, startTimeOk := annotations["d8r/startTime"]
 	stopTime, stopTimeOk := annotations["d8r/stopTime"]
@@ -224,7 +236,12 @@ func checkDeployments(clientset *kubernetes.Clientset, l *log.Logger) {
 
 func getCronjobActionNeeded(annotations map[string]string, suspend bool, l *log.Logger) Action {
 	// prepare the current time for comparison
-	timeNow := time.Now()
+	timeNowRaw := time.Now()
+	timeNow, err := getRidOfDate(timeNowRaw)
+	if err != nil {
+		Log(l, err.Error())
+		return NoAction
+	}
 
 	startTime, startTimeOk := annotations["d8r/startTime"]
 	stopTime, stopTimeOk := annotations["d8r/stopTime"]
