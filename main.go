@@ -59,12 +59,12 @@ func ConvertTimeToUTC(t string) (time.Time, error) {
 	// convert to +/-hours:minutes format
 	zoneOffsetStr := fmt.Sprintf("%+.02d%.02d", zoneOffset/3600, zoneOffset%3600)
 
-	today := time.Now()
+	//today := time.Now()
 
 	formattedSrcTime := fmt.Sprintf("%d-%s-%02d %s %s %s",
-		today.Year(),
-		today.Month().String()[:3],
-		today.Day(),
+		currentTime.Year(),
+		currentTime.Month().String()[:3],
+		currentTime.Day(),
 		timeSplit[0],
 		zoneOffsetStr,
 		zoneAbbreviation)
