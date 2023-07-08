@@ -82,7 +82,18 @@ func ConvertTimeToUTC(t string) (time.Time, error) {
 	}
 	convertedTime := normalizedTime.In(UTCLocation)
 
-	return convertedTime, nil
+	// now get rid of the date as it makes no sense to use it
+	formattedUTCTime := fmt.Sprintf("0000-Jan-01 %02d:%02d +0000 UTC",
+		convertedTime.Hour(),
+		convertedTime.Minute(),
+	)
+
+	finalUTCTime, err := time.Parse("2006-Jan-02 15:04 -0700 MST", formattedUTCTime)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	return finalUTCTime, nil
 }
 
 func getDeploymentActionNeeded(annotations map[string]string, replicas int32, l *log.Logger) Action {
