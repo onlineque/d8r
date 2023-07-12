@@ -40,6 +40,7 @@ var jobActionName = map[Action]string{
 
 const annotationStartTime = "d8r/startTime"
 const annotationStopTime = "d8r/stopTime"
+const annotationTimeZone = "d8r/timeZone"
 const annotationDownTimeReplicas = "d8r/downTimeReplicas"
 const annotationOriginalReplicas = "d8r/originalReplicas"
 const annotationDays = "d8r/days"
@@ -63,56 +64,55 @@ func getRidOfDate(t time.Time) (time.Time, error) {
 	return resultTime, nil
 }
 
-func ConvertTimeToUTC(t string) (time.Time, error) {
+func ConvertTimeNowToLocal(tz string) (time.Time, string, error) {
+	loc, err := time.LoadLocation(tz)
+	if err != nil {
+		return time.Time{}, "", err
+	}
+
+	currentTime := time.Now().In(loc)
+	weekday := currentTime.Weekday().String()[:3]
+
+	result, err := getRidOfDate(currentTime)
+	if err != nil {
+		return time.Time{}, "", err
+	}
+
+	return result, weekday, nil
+}
+
+func ConvertAnnotationTime(t string) (time.Time, error) {
 	timeSplit := strings.Split(t, " ")
 	if len(timeSplit) != 2 {
 		return time.Time{}, fmt.Errorf("invalid string: %s", t)
 	}
-	// load location to get TZ abbreviation and zone offset
+
 	loc, err := time.LoadLocation(timeSplit[1])
 	if err != nil {
 		return time.Time{}, err
 	}
-	currentTime := time.Now().In(loc)
 
+	// get the timezone abbreviation and offset
+	currentTime := time.Now().In(loc)
 	zoneAbbreviation, zoneOffset := currentTime.Zone()
 	// convert to +/-hours:minutes format
 	zoneOffsetStr := fmt.Sprintf("%+.02d%.02d", zoneOffset/3600, zoneOffset%3600)
 
-	//today := time.Now()
+	formattedSrcTime := fmt.Sprintf("0000-Jan-01 %s %s %s", timeSplit[0], zoneOffsetStr, zoneAbbreviation)
+	result, err := time.Parse("2006-Jan-02 15:04 -0700 MST", formattedSrcTime)
 
-	formattedSrcTime := fmt.Sprintf("%d-%s-%02d %s %s %s",
-		currentTime.Year(),
-		currentTime.Month().String()[:3],
-		currentTime.Day(),
-		timeSplit[0],
-		zoneOffsetStr,
-		zoneAbbreviation)
-
-	// finally convert the time to normalized format
-	normalizedTime, err := time.Parse("2006-Jan-02 15:04 -0700 MST", formattedSrcTime)
 	if err != nil {
 		return time.Time{}, err
 	}
 
-	// convert to UTC
-	UTCLocation, err := time.LoadLocation("UTC")
-	if err != nil {
-		return time.Time{}, err
-	}
-	convertedTime := normalizedTime.In(UTCLocation)
-	finalUTCTime, err := getRidOfDate(convertedTime)
-	if err != nil {
-		return time.Time{}, err
-	}
-
-	return finalUTCTime, nil
+	return result, nil
 }
 
 func getDeploymentActionNeeded(annotations map[string]string, replicas int32, l *log.Logger) Action {
-	// prepare the current time for comparison
-	timeNowRaw := time.Now()
-	timeNow, err := getRidOfDate(timeNowRaw)
+	timeZone := annotations[annotationTimeZone]
+
+	// prepare the current time for comparison, convert to local time used in annotations
+	timeNow, _, err := ConvertTimeNowToLocal(timeZone)
 	if err != nil {
 		Log(l, err.Error())
 		return NoAction
@@ -125,18 +125,31 @@ func getDeploymentActionNeeded(annotations map[string]string, replicas int32, l 
 		// deployment is not set up for d8r properly
 		return NoAction
 	}
-	timeStartTime, err := ConvertTimeToUTC(startTime)
-	if err != nil {
-		Log(l, err.Error())
-		return NoAction
-	}
-	timeStopTime, err := ConvertTimeToUTC(stopTime)
+	startTimeConv, err := ConvertAnnotationTime(startTime)
 	if err != nil {
 		Log(l, err.Error())
 		return NoAction
 	}
 
-	fmt.Printf("now: %v, start: %v, stop: %v\n", timeNow, timeStartTime, timeStopTime)
+	timeStartTime, err := getRidOfDate(startTimeConv)
+	if err != nil {
+		Log(l, err.Error())
+		return NoAction
+	}
+
+	stopTimeConv, err := ConvertAnnotationTime(stopTime)
+	if err != nil {
+		Log(l, err.Error())
+		return NoAction
+	}
+
+	timeStopTime, err := getRidOfDate(stopTimeConv)
+	if err != nil {
+		Log(l, err.Error())
+		return NoAction
+	}
+
+	fmt.Printf("now: %v, start: %v, stop: %v, timezone: %s\n", timeNow, timeStartTime, timeStopTime, timeZone)
 
 	if timeStopTime.Before(timeNow) {
 		downTimeReplicas, err := strconv.ParseInt(annotations[annotationDownTimeReplicas], 10, 32)
@@ -169,8 +182,20 @@ func isDeploymentActionNeeded(annotations map[string]string, replicas int32, l *
 		// no d8r/days annotation means this deployment is not set up for d8r properly
 		return false
 	}
+
+	timeZone, timeZoneOk := annotations[annotationTimeZone]
+	if !timeZoneOk {
+		// no d8r/timeZone annotation means  this deployment is not set up for d8r properly
+		return false
+	}
+
 	// abbreviation of the day today
-	today := time.Now().Weekday().String()[:3]
+	_, today, err := ConvertTimeNowToLocal(timeZone)
+	if err != nil {
+		Log(l, err.Error())
+		return false
+	}
+
 	if !strings.Contains(days, today) {
 		// no d8r/days schedule for today, so no action is needed
 		return false
@@ -247,8 +272,10 @@ func checkDeployments(clientset *kubernetes.Clientset, l *log.Logger) {
 
 func getCronjobActionNeeded(annotations map[string]string, suspend bool, l *log.Logger) Action {
 	// prepare the current time for comparison
-	timeNowRaw := time.Now()
-	timeNow, err := getRidOfDate(timeNowRaw)
+	timeZone := annotations[annotationTimeZone]
+
+	// prepare the current time for comparison, convert to local time used in annotations
+	timeNow, _, err := ConvertTimeNowToLocal(timeZone)
 	if err != nil {
 		Log(l, err.Error())
 		return NoAction
@@ -261,18 +288,31 @@ func getCronjobActionNeeded(annotations map[string]string, suspend bool, l *log.
 		// deployment is not set up for d8r properly
 		return NoAction
 	}
-	timeStartTime, err := ConvertTimeToUTC(startTime)
-	if err != nil {
-		Log(l, err.Error())
-		return NoAction
-	}
-	timeStopTime, err := ConvertTimeToUTC(stopTime)
+	startTimeConv, err := ConvertAnnotationTime(startTime)
 	if err != nil {
 		Log(l, err.Error())
 		return NoAction
 	}
 
-	fmt.Printf("now: %v, start: %v, stop: %v\n", timeNow, timeStartTime, timeStopTime)
+	timeStartTime, err := getRidOfDate(startTimeConv)
+	if err != nil {
+		Log(l, err.Error())
+		return NoAction
+	}
+
+	stopTimeConv, err := ConvertAnnotationTime(stopTime)
+	if err != nil {
+		Log(l, err.Error())
+		return NoAction
+	}
+
+	timeStopTime, err := getRidOfDate(stopTimeConv)
+	if err != nil {
+		Log(l, err.Error())
+		return NoAction
+	}
+
+	fmt.Printf("now: %v, start: %v, stop: %v, timezone: %s\n", timeNow, timeStartTime, timeStopTime, timeZone)
 
 	if timeStopTime.Before(timeNow) {
 		// only suspend if not done yet
@@ -295,8 +335,20 @@ func isCronjobActionNeeded(annotations map[string]string, suspend bool, l *log.L
 		// no d8r/days annotation means this deployment is not set up for d8r properly
 		return false
 	}
+
+	timeZone, timeZoneOk := annotations[annotationTimeZone]
+	if !timeZoneOk {
+		// no d8r/timeZone annotation means  this deployment is not set up for d8r properly
+		return false
+	}
+
 	// abbreviation of the day today
-	today := time.Now().Weekday().String()[:3]
+	_, today, err := ConvertTimeNowToLocal(timeZone)
+	if err != nil {
+		Log(l, err.Error())
+		return false
+	}
+
 	if !strings.Contains(days, today) {
 		// no d8r/days schedule for today, so no action is needed
 		return false
