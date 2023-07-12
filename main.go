@@ -38,6 +38,12 @@ var jobActionName = map[Action]string{
 	Resume:  "resume",
 }
 
+const annotationStartTime = "d8r/startTime"
+const annotationStopTime = "d8r/stopTime"
+const annotationDownTimeReplicas = "d8r/downTimeReplicas"
+const annotationOriginalReplicas = "d8r/originalReplicas"
+const annotationDays = "d8r/days"
+
 func Log(l *log.Logger, msg string) {
 	l.SetPrefix(time.Now().Format("2006-01-02 15:04:05") + " ")
 	l.Print(msg)
@@ -112,8 +118,8 @@ func getDeploymentActionNeeded(annotations map[string]string, replicas int32, l 
 		return NoAction
 	}
 
-	startTime, startTimeOk := annotations["d8r/startTime"]
-	stopTime, stopTimeOk := annotations["d8r/stopTime"]
+	startTime, startTimeOk := annotations[annotationStartTime]
+	stopTime, stopTimeOk := annotations[annotationStopTime]
 	if !startTimeOk || !stopTimeOk {
 		// no d8r/startTime or d8r/stopTime annotation means this
 		// deployment is not set up for d8r properly
@@ -133,7 +139,7 @@ func getDeploymentActionNeeded(annotations map[string]string, replicas int32, l 
 	//fmt.Printf("now: %v, start: %v, stop: %v\n", timeNow, timeStartTime, timeStopTime)
 
 	if timeStopTime.Before(timeNow) {
-		downTimeReplicas, err := strconv.ParseInt(annotations["d8r/downTimeReplicas"], 10, 32)
+		downTimeReplicas, err := strconv.ParseInt(annotations[annotationDownTimeReplicas], 10, 32)
 		if err != nil {
 			Log(l, err.Error())
 			return NoAction
@@ -144,7 +150,7 @@ func getDeploymentActionNeeded(annotations map[string]string, replicas int32, l 
 		}
 	}
 	if timeStartTime.Before(timeNow) && !timeStopTime.Before(timeNow) {
-		originalReplicas, err := strconv.ParseInt(annotations["d8r/originalReplicas"], 10, 32)
+		originalReplicas, err := strconv.ParseInt(annotations[annotationOriginalReplicas], 10, 32)
 		if err != nil {
 			Log(l, err.Error())
 			return NoAction
@@ -158,7 +164,7 @@ func getDeploymentActionNeeded(annotations map[string]string, replicas int32, l 
 }
 
 func isDeploymentActionNeeded(annotations map[string]string, replicas int32, l *log.Logger) bool {
-	days, ok := annotations["d8r/days"]
+	days, ok := annotations[annotationDays]
 	if !ok {
 		// no d8r/days annotation means this deployment is not set up for d8r properly
 		return false
@@ -170,7 +176,7 @@ func isDeploymentActionNeeded(annotations map[string]string, replicas int32, l *
 		return false
 	}
 
-	_, downTimeReplicasOk := annotations["d8r/downTimeReplicas"]
+	_, downTimeReplicasOk := annotations[annotationDownTimeReplicas]
 	if !downTimeReplicasOk {
 		// no d8r/downTimeReplicas annotation means this deployment is not set up for d8r properly
 		return false
@@ -203,17 +209,17 @@ func checkDeployments(clientset *kubernetes.Clientset, l *log.Logger) {
 
 			switch actionToDo {
 			case Downscale:
-				downTimeReplicas, err := strconv.ParseInt(deployment.Annotations["d8r/downTimeReplicas"], 10, 32)
+				downTimeReplicas, err := strconv.ParseInt(deployment.Annotations[annotationDownTimeReplicas], 10, 32)
 				if err != nil {
 					Log(l, err.Error())
 					continue
 				}
-				deployment.Annotations["d8r/originalReplicas"] = fmt.Sprintf("%d", *deployment.Spec.Replicas)
+				deployment.Annotations[annotationOriginalReplicas] = fmt.Sprintf("%d", *deployment.Spec.Replicas)
 				downTimeReplicas32 := int32(downTimeReplicas)
 				deployment.Spec.Replicas = &downTimeReplicas32
 				deployment.SetAnnotations(deployment.Annotations)
 			case Upscale:
-				originalReplicas, err := strconv.ParseInt(deployment.Annotations["d8r/originalReplicas"], 10, 32)
+				originalReplicas, err := strconv.ParseInt(deployment.Annotations[annotationOriginalReplicas], 10, 32)
 				if err != nil {
 					Log(l, err.Error())
 					continue
@@ -230,6 +236,11 @@ func checkDeployments(clientset *kubernetes.Clientset, l *log.Logger) {
 					Log(l, err.Error())
 				}
 			}
+		} else {
+			Log(l, fmt.Sprintf("deployment: %v/%v, replicas: %d, no action needed\n",
+				deployment.Namespace,
+				deployment.Name,
+				*deployment.Spec.Replicas))
 		}
 	}
 }
@@ -243,8 +254,8 @@ func getCronjobActionNeeded(annotations map[string]string, suspend bool, l *log.
 		return NoAction
 	}
 
-	startTime, startTimeOk := annotations["d8r/startTime"]
-	stopTime, stopTimeOk := annotations["d8r/stopTime"]
+	startTime, startTimeOk := annotations[annotationStartTime]
+	stopTime, stopTimeOk := annotations[annotationStopTime]
 	if !startTimeOk || !stopTimeOk {
 		// no d8r/startTime or d8r/stopTime annotation means this
 		// deployment is not set up for d8r properly
@@ -279,7 +290,7 @@ func getCronjobActionNeeded(annotations map[string]string, suspend bool, l *log.
 }
 
 func isCronjobActionNeeded(annotations map[string]string, suspend bool, l *log.Logger) bool {
-	days, ok := annotations["d8r/days"]
+	days, ok := annotations[annotationDays]
 	if !ok {
 		// no d8r/days annotation means this deployment is not set up for d8r properly
 		return false
@@ -332,6 +343,10 @@ func checkCronjobs(clientset *kubernetes.Clientset, l *log.Logger) {
 					Log(l, err.Error())
 				}
 			}
+		} else {
+			Log(l, fmt.Sprintf("cronjob: %v/%v, no action needed\n",
+				cronjob.Namespace,
+				cronjob.Name))
 		}
 	}
 }
