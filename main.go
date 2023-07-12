@@ -146,7 +146,7 @@ func getDeploymentActionNeeded(annotations map[string]string, replicas int32, l 
 
 	fmt.Printf("now: %v, start: %v, stop: %v, timezone: %s\n", timeNow, timeStartTime, timeStopTime, timeZone)
 
-	if timeStopTime.Before(timeNow) {
+	if timeStopTime.Before(timeNow) || timeStartTime.After(timeNow) {
 		downTimeReplicas, err := strconv.ParseInt(annotations[annotationDownTimeReplicas], 10, 32)
 		if err != nil {
 			Log(l, err.Error())
@@ -256,11 +256,6 @@ func checkDeployments(clientset *kubernetes.Clientset, l *log.Logger) {
 					Log(l, err.Error())
 				}
 			}
-		} else {
-			Log(l, fmt.Sprintf("deployment: %v/%v, replicas: %d, no action needed\n",
-				deployment.Namespace,
-				deployment.Name,
-				*deployment.Spec.Replicas))
 		}
 	}
 }
@@ -309,12 +304,14 @@ func getCronjobActionNeeded(annotations map[string]string, suspend bool, l *log.
 
 	fmt.Printf("now: %v, start: %v, stop: %v, timezone: %s\n", timeNow, timeStartTime, timeStopTime, timeZone)
 
-	if timeStopTime.Before(timeNow) {
+	// should be already stopped, time is over or should be still stopped, as uptime has not yet began
+	if timeStopTime.Before(timeNow) || timeStartTime.After(timeNow) {
 		// only suspend if not done yet
 		if !suspend {
 			return Suspend
 		}
 	}
+	// should be already resumed but not yet suspended ( aka the uptime period)
 	if timeStartTime.Before(timeNow) && !timeStopTime.Before(timeNow) {
 		// only resume if not done yet
 		if suspend {
@@ -390,10 +387,6 @@ func checkCronjobs(clientset *kubernetes.Clientset, l *log.Logger) {
 					Log(l, err.Error())
 				}
 			}
-		} else {
-			Log(l, fmt.Sprintf("cronjob: %v/%v, no action needed\n",
-				cronjob.Namespace,
-				cronjob.Name))
 		}
 	}
 }
