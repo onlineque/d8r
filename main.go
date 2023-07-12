@@ -81,13 +81,8 @@ func ConvertTimeNowToLocal(tz string) (time.Time, string, error) {
 	return result, weekday, nil
 }
 
-func ConvertAnnotationTime(t string) (time.Time, error) {
-	timeSplit := strings.Split(t, " ")
-	if len(timeSplit) != 2 {
-		return time.Time{}, fmt.Errorf("invalid string: %s", t)
-	}
-
-	loc, err := time.LoadLocation(timeSplit[1])
+func ConvertAnnotationTime(t string, timeZone string) (time.Time, error) {
+	loc, err := time.LoadLocation(timeZone)
 	if err != nil {
 		return time.Time{}, err
 	}
@@ -98,7 +93,7 @@ func ConvertAnnotationTime(t string) (time.Time, error) {
 	// convert to +/-hours:minutes format
 	zoneOffsetStr := fmt.Sprintf("%+.02d%.02d", zoneOffset/3600, zoneOffset%3600)
 
-	formattedSrcTime := fmt.Sprintf("0000-Jan-01 %s %s %s", timeSplit[0], zoneOffsetStr, zoneAbbreviation)
+	formattedSrcTime := fmt.Sprintf("0000-Jan-01 %s %s %s", t, zoneOffsetStr, zoneAbbreviation)
 	result, err := time.Parse("2006-Jan-02 15:04 -0700 MST", formattedSrcTime)
 
 	if err != nil {
@@ -125,7 +120,7 @@ func getDeploymentActionNeeded(annotations map[string]string, replicas int32, l 
 		// deployment is not set up for d8r properly
 		return NoAction
 	}
-	startTimeConv, err := ConvertAnnotationTime(startTime)
+	startTimeConv, err := ConvertAnnotationTime(startTime, timeZone)
 	if err != nil {
 		Log(l, err.Error())
 		return NoAction
@@ -137,7 +132,7 @@ func getDeploymentActionNeeded(annotations map[string]string, replicas int32, l 
 		return NoAction
 	}
 
-	stopTimeConv, err := ConvertAnnotationTime(stopTime)
+	stopTimeConv, err := ConvertAnnotationTime(stopTime, timeZone)
 	if err != nil {
 		Log(l, err.Error())
 		return NoAction
@@ -288,7 +283,7 @@ func getCronjobActionNeeded(annotations map[string]string, suspend bool, l *log.
 		// deployment is not set up for d8r properly
 		return NoAction
 	}
-	startTimeConv, err := ConvertAnnotationTime(startTime)
+	startTimeConv, err := ConvertAnnotationTime(startTime, timeZone)
 	if err != nil {
 		Log(l, err.Error())
 		return NoAction
@@ -300,7 +295,7 @@ func getCronjobActionNeeded(annotations map[string]string, suspend bool, l *log.
 		return NoAction
 	}
 
-	stopTimeConv, err := ConvertAnnotationTime(stopTime)
+	stopTimeConv, err := ConvertAnnotationTime(stopTime, timeZone)
 	if err != nil {
 		Log(l, err.Error())
 		return NoAction
