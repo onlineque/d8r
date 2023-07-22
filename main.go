@@ -146,29 +146,55 @@ func getDeploymentActionNeeded(annotations map[string]string, replicas int32, l 
 
 	fmt.Printf("now: %v, start: %v, stop: %v, timezone: %s\n", timeNow, timeStartTime, timeStopTime, timeZone)
 
-	if timeStopTime.Before(timeNow) || timeStartTime.After(timeNow) {
-		downTimeReplicas, err := strconv.ParseInt(annotations[annotationDownTimeReplicas], 10, 32)
-		if err != nil {
-			Log(l, err.Error())
-			return NoAction
+	if timeStartTime.Before(timeStopTime) {
+		if timeStopTime.Before(timeNow) || timeStartTime.After(timeNow) {
+			downTimeReplicas, err := strconv.ParseInt(annotations[annotationDownTimeReplicas], 10, 32)
+			if err != nil {
+				Log(l, err.Error())
+				return NoAction
+			}
+			// only downscale if not done yet
+			if replicas != int32(downTimeReplicas) {
+				return Downscale
+			}
 		}
-		// only downscale if not done yet
-		if replicas != int32(downTimeReplicas) {
-			return Downscale
+		if timeStartTime.Before(timeNow) && !timeStopTime.Before(timeNow) {
+			originalReplicas, err := strconv.ParseInt(annotations[annotationOriginalReplicas], 10, 32)
+			if err != nil {
+				Log(l, err.Error())
+				return NoAction
+			}
+			// only upscale if not done yet
+			if replicas != int32(originalReplicas) {
+				return Upscale
+			}
 		}
+		return NoAction
+	} else {
+		if timeStartTime.After(timeNow) && timeStopTime.Before(timeNow) {
+			downTimeReplicas, err := strconv.ParseInt(annotations[annotationDownTimeReplicas], 10, 32)
+			if err != nil {
+				Log(l, err.Error())
+				return NoAction
+			}
+			// only downscale if not done yet
+			if replicas != int32(downTimeReplicas) {
+				return Downscale
+			}
+		}
+		if timeStartTime.Before(timeNow) || timeStopTime.After(timeNow) {
+			originalReplicas, err := strconv.ParseInt(annotations[annotationOriginalReplicas], 10, 32)
+			if err != nil {
+				Log(l, err.Error())
+				return NoAction
+			}
+			// only upscale if not done yet
+			if replicas != int32(originalReplicas) {
+				return Upscale
+			}
+		}
+		return NoAction
 	}
-	if timeStartTime.Before(timeNow) && !timeStopTime.Before(timeNow) {
-		originalReplicas, err := strconv.ParseInt(annotations[annotationOriginalReplicas], 10, 32)
-		if err != nil {
-			Log(l, err.Error())
-			return NoAction
-		}
-		// only upscale if not done yet
-		if replicas != int32(originalReplicas) {
-			return Upscale
-		}
-	}
-	return NoAction
 }
 
 func isDeploymentActionNeeded(annotations map[string]string, replicas int32, l *log.Logger) bool {
@@ -304,21 +330,39 @@ func getCronjobActionNeeded(annotations map[string]string, suspend bool, l *log.
 
 	fmt.Printf("now: %v, start: %v, stop: %v, timezone: %s\n", timeNow, timeStartTime, timeStopTime, timeZone)
 
-	// should be already stopped, time is over or should be still stopped, as uptime has not yet began
-	if timeStopTime.Before(timeNow) || timeStartTime.After(timeNow) {
-		// only suspend if not done yet
-		if !suspend {
-			return Suspend
+	if timeStartTime.Before(timeStopTime) {
+		// should be already stopped, time is over or should be still stopped, as uptime has not yet began
+		if timeStopTime.Before(timeNow) || timeStartTime.After(timeNow) {
+			// only suspend if not done yet
+			if !suspend {
+				return Suspend
+			}
 		}
-	}
-	// should be already resumed but not yet suspended ( aka the uptime period)
-	if timeStartTime.Before(timeNow) && !timeStopTime.Before(timeNow) {
-		// only resume if not done yet
-		if suspend {
-			return Resume
+		// should be already resumed but not yet suspended ( aka the uptime period)
+		if timeStartTime.Before(timeNow) && !timeStopTime.Before(timeNow) {
+			// only resume if not done yet
+			if suspend {
+				return Resume
+			}
 		}
+		return NoAction
+	} else {
+		// should be already stopped, time is over or should be still stopped, as uptime has not yet began
+		if timeStartTime.After(timeNow) && timeStopTime.Before(timeNow) {
+			// only suspend if not done yet
+			if !suspend {
+				return Suspend
+			}
+		}
+		// should be already resumed but not yet suspended ( aka the uptime period)
+		if timeStartTime.Before(timeNow) || timeStopTime.After(timeNow) {
+			// only resume if not done yet
+			if suspend {
+				return Resume
+			}
+		}
+		return NoAction
 	}
-	return NoAction
 }
 
 func isCronjobActionNeeded(annotations map[string]string, suspend bool, l *log.Logger) bool {
