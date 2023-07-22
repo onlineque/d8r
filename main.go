@@ -144,7 +144,7 @@ func getDeploymentActionNeeded(annotations map[string]string, replicas int32, l 
 		return NoAction
 	}
 
-	fmt.Printf("now: %v, start: %v, stop: %v, timezone: %s\n", timeNow, timeStartTime, timeStopTime, timeZone)
+	// fmt.Printf("now: %v, start: %v, stop: %v, timezone: %s\n", timeNow, timeStartTime, timeStopTime, timeZone)
 
 	if timeStartTime.Before(timeStopTime) {
 		if timeStopTime.Before(timeNow) || timeStartTime.After(timeNow) {
@@ -328,7 +328,7 @@ func getCronjobActionNeeded(annotations map[string]string, suspend bool, l *log.
 		return NoAction
 	}
 
-	fmt.Printf("now: %v, start: %v, stop: %v, timezone: %s\n", timeNow, timeStartTime, timeStopTime, timeZone)
+	// fmt.Printf("now: %v, start: %v, stop: %v, timezone: %s\n", timeNow, timeStartTime, timeStopTime, timeZone)
 
 	if timeStartTime.Before(timeStopTime) {
 		// should be already stopped, time is over or should be still stopped, as uptime has not yet began
