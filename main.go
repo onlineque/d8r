@@ -50,6 +50,7 @@ func Log(l *log.Logger, msg string) {
 	l.Print(msg)
 }
 
+/*
 func getWeekdayAfter(today string) (string, error) {
 	days := [7]string{"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"}
 
@@ -63,6 +64,7 @@ func getWeekdayAfter(today string) (string, error) {
 	}
 	return "", fmt.Errorf("invalid date")
 }
+*/
 
 func getRidOfDate(t time.Time) (time.Time, error) {
 	// now get rid of the date as it makes no sense to use it
@@ -114,7 +116,7 @@ func ConvertAnnotationTime(t string, timeZone string) (time.Time, error) {
 		return time.Time{}, err
 	}
 
-	return result, nil
+	return getRidOfDate(result)
 }
 
 func getDeploymentActionNeeded(annotations map[string]string, replicas int32, l *log.Logger) Action {
@@ -134,25 +136,13 @@ func getDeploymentActionNeeded(annotations map[string]string, replicas int32, l 
 		// deployment is not set up for d8r properly
 		return NoAction
 	}
-	startTimeConv, err := ConvertAnnotationTime(startTime, timeZone)
+	timeStartTime, err := ConvertAnnotationTime(startTime, timeZone)
 	if err != nil {
 		Log(l, err.Error())
 		return NoAction
 	}
 
-	timeStartTime, err := getRidOfDate(startTimeConv)
-	if err != nil {
-		Log(l, err.Error())
-		return NoAction
-	}
-
-	stopTimeConv, err := ConvertAnnotationTime(stopTime, timeZone)
-	if err != nil {
-		Log(l, err.Error())
-		return NoAction
-	}
-
-	timeStopTime, err := getRidOfDate(stopTimeConv)
+	timeStopTime, err := ConvertAnnotationTime(stopTime, timeZone)
 	if err != nil {
 		Log(l, err.Error())
 		return NoAction
