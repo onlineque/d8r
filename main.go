@@ -50,21 +50,19 @@ func Log(l *log.Logger, msg string) {
 	l.Print(msg)
 }
 
-/*
-func getWeekdayAfter(today string) (string, error) {
+func getWeekdayBefore(today string) (string, error) {
 	days := [7]string{"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"}
 
 	for i, v := range days {
 		if v == today {
-			if i == 6 {
-				i = -1
+			if i == 0 {
+				i = 7
 			}
-			return days[i+1], nil
+			return days[i-1], nil
 		}
 	}
 	return "", fmt.Errorf("invalid date")
 }
-*/
 
 func getRidOfDate(t time.Time) (time.Time, error) {
 	// now get rid of the date as it makes no sense to use it
@@ -123,9 +121,17 @@ func getDeploymentActionNeeded(annotations map[string]string, replicas int32, l 
 	timeZone := annotations[annotationTimeZone]
 
 	// prepare the current time for comparison, convert to local time used in annotations
-	timeNow, _, err := ConvertTimeNowToLocal(timeZone)
+	timeNow, today, err := ConvertTimeNowToLocal(timeZone)
 	if err != nil {
 		Log(l, err.Error())
+		return NoAction
+	}
+
+	yesterday, _ := getWeekdayBefore(today)
+
+	days, ok := annotations[annotationDays]
+	if !ok {
+		// no d8r/days annotation means this deployment is not set up for d8r properly
 		return NoAction
 	}
 
@@ -151,6 +157,11 @@ func getDeploymentActionNeeded(annotations map[string]string, replicas int32, l 
 	// fmt.Printf("now: %v, start: %v, stop: %v, timezone: %s\n", timeNow, timeStartTime, timeStopTime, timeZone)
 
 	if timeStartTime.Before(timeStopTime) {
+		if !strings.Contains(days, today) {
+			// today has no schedule
+			return NoAction
+		}
+
 		if timeStopTime.Before(timeNow) || timeStartTime.After(timeNow) {
 			downTimeReplicas, err := strconv.ParseInt(annotations[annotationDownTimeReplicas], 10, 32)
 			if err != nil {
@@ -175,6 +186,11 @@ func getDeploymentActionNeeded(annotations map[string]string, replicas int32, l 
 		}
 		return NoAction
 	} else {
+		if !strings.Contains(days, today) && !strings.Contains(days, yesterday) {
+			// today or yestarday has no schedule
+			return NoAction
+		}
+
 		if timeStartTime.After(timeNow) && timeStopTime.Before(timeNow) {
 			downTimeReplicas, err := strconv.ParseInt(annotations[annotationDownTimeReplicas], 10, 32)
 			if err != nil {
@@ -202,7 +218,7 @@ func getDeploymentActionNeeded(annotations map[string]string, replicas int32, l 
 }
 
 func isDeploymentActionNeeded(annotations map[string]string, replicas int32, l *log.Logger) bool {
-	days, ok := annotations[annotationDays]
+	_, ok := annotations[annotationDays]
 	if !ok {
 		// no d8r/days annotation means this deployment is not set up for d8r properly
 		return false
@@ -215,14 +231,9 @@ func isDeploymentActionNeeded(annotations map[string]string, replicas int32, l *
 	}
 
 	// abbreviation of the day today
-	_, today, err := ConvertTimeNowToLocal(timeZone)
+	_, _, err := ConvertTimeNowToLocal(timeZone)
 	if err != nil {
 		Log(l, err.Error())
-		return false
-	}
-
-	if !strings.Contains(days, today) {
-		// no d8r/days schedule for today, so no action is needed
 		return false
 	}
 
