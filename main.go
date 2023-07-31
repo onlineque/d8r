@@ -50,6 +50,20 @@ func Log(l *log.Logger, msg string) {
 	l.Print(msg)
 }
 
+func getWeekdayAfter(today string) (string, error) {
+	days := [7]string{"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"}
+
+	for i, v := range days {
+		if v == today {
+			if i == 6 {
+				i = -1
+			}
+			return days[i+1], nil
+		}
+	}
+	return "", fmt.Errorf("invalid date")
+}
+
 func getRidOfDate(t time.Time) (time.Time, error) {
 	// now get rid of the date as it makes no sense to use it
 	formattedTime := fmt.Sprintf("0000-Jan-01 %02d:%02d +0000 UTC",
