@@ -466,6 +466,7 @@ func checkCronjobs(clientset *kubernetes.Clientset, l *log.Logger) {
 func main() {
 	l := log.New(os.Stdout, "", 0)
 
+	logger(l, "d8r started")
 	// creates the in-cluster config
 	config, err := rest.InClusterConfig()
 	if err != nil {
@@ -481,4 +482,5 @@ func main() {
 
 	checkDeployments(clientset, l)
 	checkCronjobs(clientset, l)
+	logger(l, "d8r finished")
 }
