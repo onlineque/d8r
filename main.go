@@ -45,7 +45,7 @@ const annotationDownTimeReplicas = "d8r/downTimeReplicas"
 const annotationOriginalReplicas = "d8r/originalReplicas"
 const annotationDays = "d8r/days"
 
-func Log(l *log.Logger, msg string) {
+func logger(l *log.Logger, msg string) {
 	l.SetPrefix(time.Now().Format("2006-01-02 15:04:05") + " ")
 	l.Print(msg)
 }
@@ -78,7 +78,7 @@ func getRidOfDate(t time.Time) (time.Time, error) {
 	return resultTime, nil
 }
 
-func ConvertTimeNowToLocal(tz string) (time.Time, string, error) {
+func convertTimeNowToLocal(tz string) (time.Time, string, error) {
 	loc, err := time.LoadLocation(tz)
 	if err != nil {
 		return time.Time{}, "", err
@@ -95,7 +95,7 @@ func ConvertTimeNowToLocal(tz string) (time.Time, string, error) {
 	return result, weekday, nil
 }
 
-func ConvertAnnotationTime(t string, timeZone string) (time.Time, error) {
+func convertAnnotationTime(t string, timeZone string) (time.Time, error) {
 	loc, err := time.LoadLocation(timeZone)
 	if err != nil {
 		return time.Time{}, err
@@ -121,9 +121,9 @@ func getDeploymentActionNeeded(annotations map[string]string, replicas int32, l 
 	timeZone := annotations[annotationTimeZone]
 
 	// prepare the current time for comparison, convert to local time used in annotations
-	timeNow, today, err := ConvertTimeNowToLocal(timeZone)
+	timeNow, today, err := convertTimeNowToLocal(timeZone)
 	if err != nil {
-		Log(l, err.Error())
+		logger(l, err.Error())
 		return NoAction
 	}
 
@@ -142,15 +142,15 @@ func getDeploymentActionNeeded(annotations map[string]string, replicas int32, l 
 		// deployment is not set up for d8r properly
 		return NoAction
 	}
-	timeStartTime, err := ConvertAnnotationTime(startTime, timeZone)
+	timeStartTime, err := convertAnnotationTime(startTime, timeZone)
 	if err != nil {
-		Log(l, err.Error())
+		logger(l, err.Error())
 		return NoAction
 	}
 
-	timeStopTime, err := ConvertAnnotationTime(stopTime, timeZone)
+	timeStopTime, err := convertAnnotationTime(stopTime, timeZone)
 	if err != nil {
-		Log(l, err.Error())
+		logger(l, err.Error())
 		return NoAction
 	}
 
@@ -165,7 +165,7 @@ func getDeploymentActionNeeded(annotations map[string]string, replicas int32, l 
 		if timeStopTime.Before(timeNow) || timeStartTime.After(timeNow) {
 			downTimeReplicas, err := strconv.ParseInt(annotations[annotationDownTimeReplicas], 10, 32)
 			if err != nil {
-				Log(l, err.Error())
+				logger(l, err.Error())
 				return NoAction
 			}
 			// only downscale if not done yet
@@ -176,7 +176,7 @@ func getDeploymentActionNeeded(annotations map[string]string, replicas int32, l 
 		if timeStartTime.Before(timeNow) && !timeStopTime.Before(timeNow) {
 			originalReplicas, err := strconv.ParseInt(annotations[annotationOriginalReplicas], 10, 32)
 			if err != nil {
-				Log(l, err.Error())
+				logger(l, err.Error())
 				return NoAction
 			}
 			// only upscale if not done yet
@@ -187,14 +187,14 @@ func getDeploymentActionNeeded(annotations map[string]string, replicas int32, l 
 		return NoAction
 	} else {
 		if !strings.Contains(days, today) && !strings.Contains(days, yesterday) {
-			// today or yestarday has no schedule
+			// today or yesterday has no schedule
 			return NoAction
 		}
 
 		if timeStartTime.After(timeNow) && timeStopTime.Before(timeNow) {
 			downTimeReplicas, err := strconv.ParseInt(annotations[annotationDownTimeReplicas], 10, 32)
 			if err != nil {
-				Log(l, err.Error())
+				logger(l, err.Error())
 				return NoAction
 			}
 			// only downscale if not done yet
@@ -205,7 +205,7 @@ func getDeploymentActionNeeded(annotations map[string]string, replicas int32, l 
 		if timeStartTime.Before(timeNow) || timeStopTime.After(timeNow) {
 			originalReplicas, err := strconv.ParseInt(annotations[annotationOriginalReplicas], 10, 32)
 			if err != nil {
-				Log(l, err.Error())
+				logger(l, err.Error())
 				return NoAction
 			}
 			// only upscale if not done yet
@@ -231,9 +231,9 @@ func isDeploymentActionNeeded(annotations map[string]string, replicas int32, l *
 	}
 
 	// abbreviation of the day today
-	_, _, err := ConvertTimeNowToLocal(timeZone)
+	_, _, err := convertTimeNowToLocal(timeZone)
 	if err != nil {
-		Log(l, err.Error())
+		logger(l, err.Error())
 		return false
 	}
 
@@ -252,7 +252,7 @@ func isDeploymentActionNeeded(annotations map[string]string, replicas int32, l *
 func checkDeployments(clientset *kubernetes.Clientset, l *log.Logger) {
 	deployments, err := clientset.AppsV1().Deployments("").List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
-		Log(l, err.Error())
+		logger(l, err.Error())
 		os.Exit(3)
 	}
 
@@ -262,7 +262,7 @@ func checkDeployments(clientset *kubernetes.Clientset, l *log.Logger) {
 		if actionNeeded {
 			actionToDo := getDeploymentActionNeeded(annotations, *deployment.Spec.Replicas, l)
 
-			Log(l, fmt.Sprintf("deployment: %v/%v, replicas: %d, action needed: %v\n",
+			logger(l, fmt.Sprintf("deployment: %v/%v, replicas: %d, action needed: %v\n",
 				deployment.Namespace,
 				deployment.Name,
 				*deployment.Spec.Replicas,
@@ -272,7 +272,7 @@ func checkDeployments(clientset *kubernetes.Clientset, l *log.Logger) {
 			case Downscale:
 				downTimeReplicas, err := strconv.ParseInt(deployment.Annotations[annotationDownTimeReplicas], 10, 32)
 				if err != nil {
-					Log(l, err.Error())
+					logger(l, err.Error())
 					continue
 				}
 				deployment.Annotations[annotationOriginalReplicas] = fmt.Sprintf("%d", *deployment.Spec.Replicas)
@@ -282,7 +282,7 @@ func checkDeployments(clientset *kubernetes.Clientset, l *log.Logger) {
 			case Upscale:
 				originalReplicas, err := strconv.ParseInt(deployment.Annotations[annotationOriginalReplicas], 10, 32)
 				if err != nil {
-					Log(l, err.Error())
+					logger(l, err.Error())
 					continue
 				}
 				originalReplicas32 := int32(originalReplicas)
@@ -294,7 +294,7 @@ func checkDeployments(clientset *kubernetes.Clientset, l *log.Logger) {
 					&deployment,
 					metav1.UpdateOptions{})
 				if err != nil {
-					Log(l, err.Error())
+					logger(l, err.Error())
 				}
 			}
 		}
@@ -306,9 +306,17 @@ func getCronjobActionNeeded(annotations map[string]string, suspend bool, l *log.
 	timeZone := annotations[annotationTimeZone]
 
 	// prepare the current time for comparison, convert to local time used in annotations
-	timeNow, _, err := ConvertTimeNowToLocal(timeZone)
+	timeNow, today, err := convertTimeNowToLocal(timeZone)
 	if err != nil {
-		Log(l, err.Error())
+		logger(l, err.Error())
+		return NoAction
+	}
+
+	yesterday, _ := getWeekdayBefore(today)
+
+	days, ok := annotations[annotationDays]
+	if !ok {
+		// no d8r/days annotation means this cronjob is not set up for d8r properly
 		return NoAction
 	}
 
@@ -319,33 +327,38 @@ func getCronjobActionNeeded(annotations map[string]string, suspend bool, l *log.
 		// deployment is not set up for d8r properly
 		return NoAction
 	}
-	startTimeConv, err := ConvertAnnotationTime(startTime, timeZone)
+	startTimeConv, err := convertAnnotationTime(startTime, timeZone)
 	if err != nil {
-		Log(l, err.Error())
+		logger(l, err.Error())
 		return NoAction
 	}
 
 	timeStartTime, err := getRidOfDate(startTimeConv)
 	if err != nil {
-		Log(l, err.Error())
+		logger(l, err.Error())
 		return NoAction
 	}
 
-	stopTimeConv, err := ConvertAnnotationTime(stopTime, timeZone)
+	stopTimeConv, err := convertAnnotationTime(stopTime, timeZone)
 	if err != nil {
-		Log(l, err.Error())
+		logger(l, err.Error())
 		return NoAction
 	}
 
 	timeStopTime, err := getRidOfDate(stopTimeConv)
 	if err != nil {
-		Log(l, err.Error())
+		logger(l, err.Error())
 		return NoAction
 	}
 
 	// fmt.Printf("now: %v, start: %v, stop: %v, timezone: %s\n", timeNow, timeStartTime, timeStopTime, timeZone)
 
 	if timeStartTime.Before(timeStopTime) {
+		if !strings.Contains(days, today) {
+			// today has no schedule
+			return NoAction
+		}
+
 		// should be already stopped, time is over or should be still stopped, as uptime has not yet began
 		if timeStopTime.Before(timeNow) || timeStartTime.After(timeNow) {
 			// only suspend if not done yet
@@ -362,6 +375,11 @@ func getCronjobActionNeeded(annotations map[string]string, suspend bool, l *log.
 		}
 		return NoAction
 	} else {
+		if !strings.Contains(days, today) && !strings.Contains(days, yesterday) {
+			// today or yesterday has no schedule
+			return NoAction
+		}
+
 		// should be already stopped, time is over or should be still stopped, as uptime has not yet began
 		if timeStartTime.After(timeNow) && timeStopTime.Before(timeNow) {
 			// only suspend if not done yet
@@ -381,7 +399,7 @@ func getCronjobActionNeeded(annotations map[string]string, suspend bool, l *log.
 }
 
 func isCronjobActionNeeded(annotations map[string]string, suspend bool, l *log.Logger) bool {
-	days, ok := annotations[annotationDays]
+	_, ok := annotations[annotationDays]
 	if !ok {
 		// no d8r/days annotation means this deployment is not set up for d8r properly
 		return false
@@ -394,14 +412,9 @@ func isCronjobActionNeeded(annotations map[string]string, suspend bool, l *log.L
 	}
 
 	// abbreviation of the day today
-	_, today, err := ConvertTimeNowToLocal(timeZone)
+	_, _, err := convertTimeNowToLocal(timeZone)
 	if err != nil {
-		Log(l, err.Error())
-		return false
-	}
-
-	if !strings.Contains(days, today) {
-		// no d8r/days schedule for today, so no action is needed
+		logger(l, err.Error())
 		return false
 	}
 
@@ -414,7 +427,7 @@ func isCronjobActionNeeded(annotations map[string]string, suspend bool, l *log.L
 func checkCronjobs(clientset *kubernetes.Clientset, l *log.Logger) {
 	cronjobs, err := clientset.BatchV1().CronJobs("").List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
-		Log(l, err.Error())
+		logger(l, err.Error())
 		os.Exit(3)
 	}
 	for _, cronjob := range cronjobs.Items {
@@ -423,7 +436,7 @@ func checkCronjobs(clientset *kubernetes.Clientset, l *log.Logger) {
 		actionNeeded := isCronjobActionNeeded(annotations, *suspend, l)
 		if actionNeeded {
 			actionToDo := getCronjobActionNeeded(annotations, *suspend, l)
-			Log(l, fmt.Sprintf("cronjob: %v/%v, action needed: %s\n",
+			logger(l, fmt.Sprintf("cronjob: %v/%v, action needed: %s\n",
 				cronjob.Namespace,
 				cronjob.Name,
 				jobActionName[actionToDo]))
@@ -443,7 +456,7 @@ func checkCronjobs(clientset *kubernetes.Clientset, l *log.Logger) {
 					&cronjob,
 					metav1.UpdateOptions{})
 				if err != nil {
-					Log(l, err.Error())
+					logger(l, err.Error())
 				}
 			}
 		}
@@ -456,13 +469,13 @@ func main() {
 	// creates the in-cluster config
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		Log(l, err.Error())
+		logger(l, err.Error())
 		os.Exit(1)
 	}
 	// creates the clientset
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		Log(l, err.Error())
+		logger(l, err.Error())
 		os.Exit(2)
 	}
 
