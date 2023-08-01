@@ -479,9 +479,6 @@ func main() {
 		os.Exit(2)
 	}
 
-	for {
-		checkDeployments(clientset, l)
-		checkCronjobs(clientset, l)
-		time.Sleep(10 * time.Second)
-	}
+	checkDeployments(clientset, l)
+	checkCronjobs(clientset, l)
 }

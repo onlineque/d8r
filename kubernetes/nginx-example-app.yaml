@@ -7,8 +7,9 @@ metadata:
     app.kubernetes.io/instance: nginx
   annotations:
     d8r/days: "Mon,Tue,Wed,Thu,Fri"
-    d8r/startTime: "08:00 Europe/Prague"
-    d8r/stopTime: "16:00 Europe/Prague"
+    d8r/startTime: "08:00"
+    d8r/stopTime: "16:00"
+    d8r/timeZone: "Europe/Prague"
     d8r/downTimeReplicas: "1"
 spec:
   replicas: 2
